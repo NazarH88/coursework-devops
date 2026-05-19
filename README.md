@@ -330,7 +330,7 @@ git push origin main
 
 GitHub repository:
 
-:contentReference[oaicite:0]{index=0}
+[:contentReference[oaicite:0]{index=0}](https://github.com/NazarH88/coursework-devops)
 
 ---
 
