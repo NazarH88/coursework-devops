@@ -6,19 +6,19 @@
 
 ```
 coursework-devops/
+│
 ├── app/
-│   ├── app.py              # Flask-додаток
-│   ├── requirements.txt    # Python залежності
+│   ├── app.py
+│   ├── requirements.txt
 │   └── templates/
-│       └── index.html      # Головна сторінка
+│       └── index.html
+│
 ├── docker/
-│   └── nginx.conf          # Конфігурація Nginx
-├── jenkins/
-│   └── Jenkinsfile         # CI/CD пайплайн
-├── docker-compose.yml      # Оркестрація сервісів
-├── Dockerfile              # Multi-stage збірка образу
-├── .gitignore
-└── README.md
+│   ├── Dockerfile
+│   └── nginx.conf
+│
+├── Jenkinsfile
+└── docker-compose.yml
 ```
 
 ## Швидкий старт (без Jenkins)
