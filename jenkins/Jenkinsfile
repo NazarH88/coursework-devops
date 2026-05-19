@@ -43,7 +43,7 @@ pipeline {
             steps {
                 echo "==> Збірка Docker-образу ${IMAGE_NAME}:${IMAGE_TAG}..."
                 sh '''
-                    docker build \
+                    docker build -f docker/Dockerfile \
                       --tag ${IMAGE_NAME}:${IMAGE_TAG} \
                       --tag ${IMAGE_NAME}:latest \
                       .
