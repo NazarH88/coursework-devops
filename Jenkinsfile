@@ -1,0 +1,149 @@
+// ─── Jenkins Pipeline — Build → Test → Deploy ──────────────────────────────
+pipeline {
+
+    // Запускати на будь-якому доступному агенті
+    agent any
+
+    // Змінні середовища для всього пайплайну
+    environment {
+        IMAGE_NAME    = "coursework-flask-app"
+        IMAGE_TAG     = "${BUILD_NUMBER}"           // тег = номер білду
+        CONTAINER_NAME = "flask_app"
+        COMPOSE_FILE  = "docker-compose.yml"
+    }
+
+    // Тригери: запуск при кожному push у репозиторій
+    triggers {
+        pollSCM('H/5 * * * *')   // перевіряти SCM кожні 5 хвилин
+    }
+
+    stages {
+
+        // ── 1. Checkout ────────────────────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                echo "==> Клонування репозиторію..."
+                checkout scm
+            }
+        }
+
+        // ── 2. Lint / Static check ─────────────────────────────────────────
+        stage('Lint') {
+            steps {
+                echo "==> Перевірка синтаксису Python..."
+                sh '''
+                    python3 -m py_compile app/app.py
+                    echo "Синтаксична перевірка пройдена."
+                '''
+            }
+        }
+
+        // ── 3. Build Docker image ──────────────────────────────────────────
+        stage('Build') {
+            steps {
+                echo "==> Збірка Docker-образу ${IMAGE_NAME}:${IMAGE_TAG}..."
+                sh '''
+                    docker build \
+                      --tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                      --tag ${IMAGE_NAME}:latest \
+                      .
+                '''
+            }
+        }
+
+        // ── 4. Test (health-check після локального старту) ─────────────────
+        stage('Test') {
+            steps {
+                echo "==> Запуск контейнера для перевірки..."
+                sh '''
+                    # Зупиняємо якщо вже запущений
+                    docker rm -f test_flask 2>/dev/null || true
+
+                    # Запускаємо тимчасовий контейнер
+                    docker run -d \
+                      --name test_flask \
+                      -p 5001:5000 \
+                      -e APP_ENV=testing \
+                      ${IMAGE_NAME}:${IMAGE_TAG}
+
+                    # Чекаємо поки застосунок стартує
+                    sleep 8
+
+                    # Health-check запит
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/api/health)
+                    echo "HTTP статус: $STATUS"
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "ПОМИЛКА: health-check повернув $STATUS"
+                        docker logs test_flask
+                        exit 1
+                    fi
+
+                    echo "Тест пройдено успішно!"
+                '''
+            }
+            post {
+                always {
+                    // Завжди прибираємо тестовий контейнер
+                    sh 'docker rm -f test_flask 2>/dev/null || true'
+                }
+            }
+        }
+
+        // ── 5. Deploy (docker-compose up) ─────────────────────────────────
+        stage('Deploy') {
+            steps {
+                echo "==> Розгортання через docker-compose..."
+                sh '''
+                    # Зупиняємо старі контейнери
+                    docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
+
+                    # Піднімаємо нові (з новим образом)
+                    docker compose -f ${COMPOSE_FILE} up -d --build
+
+                    echo "Розгортання завершено!"
+                '''
+            }
+        }
+
+        // ── 6. Verify deployment ───────────────────────────────────────────
+        stage('Verify') {
+            steps {
+                echo "==> Перевірка розгорнутих сервісів..."
+                sh '''
+                    # Чекаємо поки nginx та app піднімуться
+                    sleep 10
+
+                    # Перевіряємо через Nginx (порт 80)
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/health)
+                    echo "Фінальний health-check (через Nginx): HTTP $STATUS"
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "ПОМИЛКА: сервіс недоступний після деплою!"
+                        docker compose logs
+                        exit 1
+                    fi
+
+                    # Виводимо статус контейнерів
+                    docker compose ps
+                    echo "Деплой верифіковано успішно!"
+                '''
+            }
+        }
+    }
+
+    // ── Post-actions ───────────────────────────────────────────────────────
+    post {
+        success {
+            echo "Pipeline завершено успішно! Додаток доступний на http://localhost"
+        }
+        failure {
+            echo "Pipeline завершився з помилкою. Перевірте логи вище."
+            // За потреби тут можна додати сповіщення (email, Telegram тощо)
+        }
+        always {
+            echo "Очищення застарілих Docker-образів..."
+            sh 'docker image prune -f 2>/dev/null || true'
+        }
+    }
+}
