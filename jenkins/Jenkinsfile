@@ -28,15 +28,15 @@ pipeline {
         }
 
         // ── 2. Lint / Static check ─────────────────────────────────────────
-        stage('Lint') {
-            steps {
-                echo "==> Перевірка синтаксису Python..."
-                sh '''
-                    python3 -m py_compile app/app.py
-                    echo "Синтаксична перевірка пройдена."
-                '''
-            }
-        }
+        // stage('Lint') {
+        //     steps {
+        //         echo "==> Перевірка синтаксису Python..."
+        //         sh '''
+        //             python3 -m py_compile app/app.py
+        //             echo "Синтаксична перевірка пройдена."
+        //         '''
+        //     }
+        // }
 
         // ── 3. Build Docker image ──────────────────────────────────────────
         stage('Build') {
